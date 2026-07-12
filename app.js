@@ -1,7 +1,7 @@
 import {
   SEARCH, blocksOf, targetFrom, resolveTrips, tripMargin, verifyAll,
   strayWarnings, solve, serializeState, deserializeState, isCandidate,
-} from "./engine.js";
+} from "./engine.js?v=4";
 
 // ---------------------------------------------------------------------------
 // State
