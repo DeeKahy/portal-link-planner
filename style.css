@@ -171,6 +171,14 @@ footer a { color: var(--accent); }
 
 /* portal card extras */
 .paste-box { width: 10rem; font-size: 0.8rem; color: var(--muted); }
+.coord { display: inline-flex; align-items: center; gap: 0.2rem; }
+.coord .axis-lock { width: auto; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.coords-row { row-gap: 0.4rem; }
+.connect-row {
+  background: var(--accent-soft); border-radius: 7px; padding: 0.35rem 0.5rem;
+  margin: 0.2rem 0 0.4rem;
+}
+.connect-row button { font-size: 0.8rem; }
 details.adv { margin-top: 0.15rem; }
 details.adv summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; }
 details.adv .row { margin-top: 0.4rem; }

@@ -1,7 +1,17 @@
 import {
   SEARCH, blocksOf, targetFrom, resolveTrips, tripMargin, verifyAll,
-  strayWarnings, solve, serializeState, deserializeState, isCandidate,
-} from "./engine.js?v=5";
+  strayWarnings, solve, serializeState, deserializeState, isCandidate, locksOf,
+} from "./engine.js?v=6";
+
+const LOCK_ALL = () => ({ x: true, y: true, z: true });
+const LOCK_NONE = () => ({ x: false, y: false, z: false });
+const fullyLocked = (p) => p.lock.x && p.lock.y && p.lock.z;
+// Short note for labels: "locked" when fully locked, "Y locked" etc. when partial.
+function lockNote(p) {
+  if (fullyLocked(p)) return "locked";
+  const axes = ["x", "y", "z"].filter((a) => p.lock[a]);
+  return axes.length ? axes.map((a) => a.toUpperCase()).join("/") + " locked" : "";
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -22,10 +32,10 @@ const PRESETS = {
   worked: {
     edition: "java",
     portals: [
-      { id: "p1", name: "Storage", dim: "overworld", x: 814, y: 87, z: -2513, axis: "x", locked: true, minY: null, maxY: null },
-      { id: "p2", name: "Pretty", dim: "overworld", x: 828, y: 87, z: -2471, axis: "x", locked: true, minY: null, maxY: null },
-      { id: "p3", name: "Roof portal", dim: "nether", x: 101, y: 128, z: -315, axis: "x", locked: false, minY: 128, maxY: 128 },
-      { id: "p4", name: "Below portal", dim: "nether", x: 103, y: 87, z: -296, axis: "x", locked: false, minY: 70, maxY: 122 },
+      { id: "p1", name: "Storage", dim: "overworld", x: 814, y: 87, z: -2513, axis: "x", lock: LOCK_ALL(), minY: null, maxY: null },
+      { id: "p2", name: "Pretty", dim: "overworld", x: 828, y: 87, z: -2471, axis: "x", lock: LOCK_ALL(), minY: null, maxY: null },
+      { id: "p3", name: "Roof portal", dim: "nether", x: 101, y: 128, z: -315, axis: "x", lock: { x: false, y: true, z: false }, minY: null, maxY: null },
+      { id: "p4", name: "Below portal", dim: "nether", x: 103, y: 87, z: -296, axis: "x", lock: LOCK_NONE(), minY: 70, maxY: 122 },
     ],
     links: [
       { from: "p1", to: "p3" }, { from: "p3", to: "p1" },
@@ -35,18 +45,18 @@ const PRESETS = {
   simple: {
     edition: "java",
     portals: [
-      { id: "p1", name: "Base", dim: "overworld", x: 200, y: 64, z: -400, axis: "x", locked: true, minY: null, maxY: null },
-      { id: "p2", name: "Nether side", dim: "nether", x: 25, y: 64, z: -50, axis: "x", locked: false, minY: null, maxY: null },
+      { id: "p1", name: "Base", dim: "overworld", x: 200, y: 64, z: -400, axis: "x", lock: LOCK_ALL(), minY: null, maxY: null },
+      { id: "p2", name: "Nether side", dim: "nether", x: 25, y: 64, z: -50, axis: "x", lock: LOCK_NONE(), minY: null, maxY: null },
     ],
     links: [{ from: "p1", to: "p2" }, { from: "p2", to: "p1" }],
   },
   hub: {
     edition: "java",
     portals: [
-      { id: "p1", name: "Base A", dim: "overworld", x: 0, y: 64, z: 0, axis: "x", locked: true, minY: null, maxY: null },
-      { id: "p2", name: "Base B", dim: "overworld", x: 180, y: 64, z: 40, axis: "x", locked: true, minY: null, maxY: null },
-      { id: "p3", name: "Hub gate A", dim: "nether", x: 0, y: 64, z: 0, axis: "x", locked: false, minY: 60, maxY: 80 },
-      { id: "p4", name: "Hub gate B", dim: "nether", x: 22, y: 64, z: 5, axis: "x", locked: false, minY: 60, maxY: 80 },
+      { id: "p1", name: "Base A", dim: "overworld", x: 0, y: 64, z: 0, axis: "x", lock: LOCK_ALL(), minY: null, maxY: null },
+      { id: "p2", name: "Base B", dim: "overworld", x: 180, y: 64, z: 40, axis: "x", lock: LOCK_ALL(), minY: null, maxY: null },
+      { id: "p3", name: "Hub gate A", dim: "nether", x: 0, y: 64, z: 0, axis: "x", lock: LOCK_NONE(), minY: 60, maxY: 80 },
+      { id: "p4", name: "Hub gate B", dim: "nether", x: 22, y: 64, z: 5, axis: "x", lock: LOCK_NONE(), minY: 60, maxY: 80 },
     ],
     links: [
       { from: "p1", to: "p3" }, { from: "p3", to: "p1" },
@@ -57,7 +67,11 @@ const PRESETS = {
 const EXAMPLE_SNAPSHOT = JSON.stringify({ p: PRESETS.worked.portals, l: PRESETS.worked.links });
 
 function sanitizeState(s) {
-  const portals = (s.portals || []).filter((p) => p && p.id && p.dim);
+  const portals = (s.portals || []).filter((p) => p && p.id && p.dim).map((p) => {
+    // Normalize the legacy single locked boolean into per-axis locks.
+    const { locked, ...rest } = p;
+    return { ...rest, lock: locksOf(p) };
+  });
   const ids = new Map(portals.map((p) => [p.id, p]));
   const seen = new Set();
   const links = (s.links || []).filter((l) => {
@@ -139,19 +153,34 @@ function renderPortals() {
   for (const p of state.portals) {
     const card = document.createElement("div");
     card.className = "portal-card " + p.dim + (p.id === flashId ? " flash-card" : "");
+    const coordField = (axis) => `
+      <span class="coord">
+        <label>${axis.toUpperCase()} <input type="number" data-f="${axis}" value="${p[axis]}"></label>
+        <input type="checkbox" class="axis-lock" data-lock="${axis}" ${p.lock[axis] ? "checked" : ""}
+          title="Lock ${axis.toUpperCase()} in place: the solver and the map keep it exactly as typed"
+          aria-label="Lock ${axis.toUpperCase()}">
+      </span>`;
+    const isLinked = state.links.some((l) => l.from === p.id || l.to === p.id);
+    const otherDimPortals = state.portals.filter((q) => q.dim !== p.dim);
+    const connectRow = !isLinked && otherDimPortals.length ? `
+      <div class="row connect-row">
+        <span class="hint">not connected yet:</span>
+        <select data-connect>${otherDimPortals.map((q) =>
+          `<option value="${q.id}">${escapeHtml(q.name)}</option>`).join("")}</select>
+        <button data-connect-go>Connect both ways</button>
+      </div>` : "";
     card.innerHTML = `
       <div class="row">
         <span class="dim-tag">${p.dim === "nether" ? "NETHER" : "OVERWORLD"}</span>
         <input type="text" data-f="name" value="${escapeHtml(p.name)}" aria-label="Portal name">
-        <label title="Locked portals are already built and stay where they are"><input type="checkbox" data-f="locked" ${p.locked ? "checked" : ""}> locked</label>
+        <label title="Lock or unlock all three coordinates at once"><input type="checkbox" data-lockall ${fullyLocked(p) ? "checked" : ""}> locked</label>
         <button class="del" data-del title="Delete portal">&times;</button>
       </div>
-      <div class="row">
-        <label>X <input type="number" data-f="x" value="${p.x}"></label>
-        <label>Y <input type="number" data-f="y" value="${p.y}"></label>
-        <label>Z <input type="number" data-f="z" value="${p.z}"></label>
+      <div class="row coords-row">
+        ${coordField("x")}${coordField("y")}${coordField("z")}
         <input type="text" class="paste-box" data-paste placeholder="or paste F3 line" title="Paste coordinates in any format, e.g. an F3 line or 814 87 -2513">
       </div>
+      ${connectRow}
       <details class="adv">
         <summary>More options</summary>
         <div class="row">
@@ -160,17 +189,32 @@ function renderPortals() {
           </label>
           <span class="hint">(direction the 2-wide opening runs; changes results by at most 1 block)</span>
         </div>
-        ${p.locked ? "" : `
+        ${p.lock.y ? "" : `
         <div class="row">
           <label>solver height limits: min Y <input type="number" data-f="minY" value="${p.minY ?? ""}" placeholder="any"></label>
           <label>max Y <input type="number" data-f="maxY" value="${p.maxY ?? ""}" placeholder="any"></label>
         </div>`}
       </details>`;
+    // The master checkbox shows a mixed state when only some axes are locked.
+    const master = card.querySelector("[data-lockall]");
+    const anyLock = p.lock.x || p.lock.y || p.lock.z;
+    master.indeterminate = anyLock && !fullyLocked(p);
     card.addEventListener("change", (e) => {
+      if (e.target.dataset.lockall !== undefined) {
+        const on = e.target.checked;
+        p.lock = { x: on, y: on, z: on };
+        render();
+        return;
+      }
+      const lockAxis = e.target.dataset.lock;
+      if (lockAxis) {
+        p.lock[lockAxis] = e.target.checked;
+        render();
+        return;
+      }
       const f = e.target.dataset.f;
       if (!f) return;
-      if (f === "locked") p.locked = e.target.checked;
-      else if (f === "name") p.name = e.target.value || p.name;
+      if (f === "name") p.name = e.target.value || p.name;
       else if (f === "axis") p.axis = e.target.value;
       else if (f === "minY" || f === "maxY") p[f] = e.target.value === "" ? null : num(e.target.value);
       else p[f] = num(e.target.value, p[f]);
@@ -179,7 +223,17 @@ function renderPortals() {
     card.querySelector("[data-paste]").addEventListener("input", (e) => {
       const c = parseCoords(e.target.value);
       if (!c) return;
-      p.x = c.x; p.y = c.y; p.z = c.z;
+      if (!p.lock.x) p.x = c.x;
+      if (!p.lock.y) p.y = c.y;
+      if (!p.lock.z) p.z = c.z;
+      render();
+    });
+    card.querySelector("[data-connect-go]")?.addEventListener("click", () => {
+      const otherId = card.querySelector("[data-connect]").value;
+      if (!otherId) return;
+      pushUndo();
+      state.links.push({ from: p.id, to: otherId });
+      state.links.push({ from: otherId, to: p.id });
       render();
     });
     card.querySelector("[data-del]").addEventListener("click", () => {
@@ -388,8 +442,8 @@ function renderMaps() {
     for (const p of geo[d].portals) {
       const color = d === "nether" ? "#dc2626" : "#7c3aed";
       svg += `<g class="portal-marker" data-portal="${p.id}">
-        <rect class="${p.id === flashId ? "flash" : ""}" x="${X(p.x) - 4}" y="${Z(p.z) - 4}" width="8" height="8" rx="1.5" fill="${color}" stroke="#2a2440" stroke-width="${p.locked ? 1.6 : 0.5}"/>
-        <text x="${X(p.x) + 7}" y="${Z(p.z) + 4}" font-size="11" fill="#3a3352">${escapeHtml(p.name)} (Y ${p.y}${p.locked ? ", locked" : ""})</text></g>`;
+        <rect class="${p.id === flashId ? "flash" : ""}" x="${X(p.x) - 4}" y="${Z(p.z) - 4}" width="8" height="8" rx="1.5" fill="${color}" stroke="#2a2440" stroke-width="${fullyLocked(p) ? 1.6 : 0.5}"/>
+        <text x="${X(p.x) + 7}" y="${Z(p.z) + 4}" font-size="11" fill="#3a3352">${escapeHtml(p.name)} (Y ${p.y}${lockNote(p) ? ", " + lockNote(p) : ""})</text></g>`;
     }
     svg += `<rect class="cursor-cell" width="${s}" height="${s}" visibility="hidden"/>`;
     svg += `<defs><marker id="arr-${d}" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
@@ -397,11 +451,12 @@ function renderMaps() {
 
     const wrap = document.createElement("div");
     wrap.className = "map-wrap";
-    const unlocked = geo[d].portals.filter((p) => !p.locked);
+    // Placeable by clicking = at least one of X/Z is unlocked.
+    const unlocked = geo[d].portals.filter((p) => !(p.lock.x && p.lock.z));
     const placeUI = unlocked.length
       ? `<label>Click the map to move: <select data-place>${unlocked.map((p) =>
           `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select></label>`
-      : `<span class="hint">all portals here are locked</span>`;
+      : `<span class="hint">nothing here can be moved by clicking (X and Z locked)</span>`;
     wrap.innerHTML = `<div class="map-tools">
         <strong>${d === "nether" ? "Nether" : "Overworld"}</strong>
         ${placeUI}
@@ -467,10 +522,10 @@ function renderMaps() {
       svgEl.addEventListener("click", (e) => {
         const pos = toWorld(e);
         const portal = state.portals.find((p) => p.id === sel.value);
-        if (!pos || !portal || portal.locked) return;
+        if (!pos || !portal || (portal.lock.x && portal.lock.z)) return;
         pushUndo();
-        portal.x = pos.x;
-        portal.z = pos.z;
+        if (!portal.lock.x) portal.x = pos.x;
+        if (!portal.lock.z) portal.z = pos.z;
         flashId = portal.id;
         render();
       });
@@ -506,7 +561,7 @@ function renderMaps() {
 // ---------------------------------------------------------------------------
 function coordText() {
   return state.portals.map((p) =>
-    `${p.name} [${p.dim}]${p.locked ? " (locked)" : ""}: ${p.x} ${p.y} ${p.z}  (frame along ${p.axis.toUpperCase()}, blocks ${blocksOf(p).map((b) => `${b.x},${b.y},${b.z}`).join(" + ")})`
+    `${p.name} [${p.dim}]${lockNote(p) ? " (" + lockNote(p) + ")" : ""}: ${p.x} ${p.y} ${p.z}  (frame along ${p.axis.toUpperCase()}, blocks ${blocksOf(p).map((b) => `${b.x},${b.y},${b.z}`).join(" + ")})`
   ).join("\n");
 }
 
@@ -536,7 +591,7 @@ function addPortal(dim) {
   }
   state.portals.push({
     id, name: (dim === "nether" ? "Nether portal " : "Overworld portal ") + id.slice(1),
-    dim, x, y, z, axis: "x", locked: false, minY: null, maxY: null,
+    dim, x, y, z, axis: "x", lock: LOCK_NONE(), minY: null, maxY: null,
   });
   render();
 }

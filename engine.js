@@ -12,7 +12,15 @@ export function otherDim(dim) {
 }
 
 // A portal is stored as its bottom-two portal blocks: one corner + orientation.
-// { id, name, dim, x, y, z, axis: "x"|"z", locked, minY, maxY }
+// { id, name, dim, x, y, z, axis: "x"|"z", lock: {x,y,z}, minY, maxY }
+// Older states carry a single boolean `locked` instead of per-axis `lock`;
+// locksOf() normalizes both forms.
+export function locksOf(p) {
+  if (p.lock && typeof p.lock === "object") {
+    return { x: !!p.lock.x, y: !!p.lock.y, z: !!p.lock.z };
+  }
+  return p.locked ? { x: true, y: true, z: true } : { x: false, y: false, z: false };
+}
 export function blocksOf(p) {
   return p.axis === "x"
     ? [{ x: p.x, y: p.y, z: p.z }, { x: p.x + 1, y: p.y, z: p.z }]
@@ -185,22 +193,32 @@ function scorePlacement(portals, links, edition) {
   return worst === Infinity ? 100 : worst;
 }
 
+function rangeAround(center, radius, step) {
+  const out = [];
+  for (let d = -radius; d <= radius; d += step) out.push(center + d);
+  return out;
+}
+
 export function solve(portals, links, edition) {
   const work = portals.map((p) => ({ ...p }));
-  const movable = work.filter(
-    (p) => !p.locked && links.some((l) => l.from === p.id || l.to === p.id)
-  );
+  // Movable = involved in a link and at least one coordinate is unlocked.
+  const movable = work.filter((p) => {
+    const lk = locksOf(p);
+    return !(lk.x && lk.y && lk.z) && links.some((l) => l.from === p.id || l.to === p.id);
+  });
   if (movable.length === 0) {
     return { ok: false, reason: "No movable portals involved in any desired link.", portals: work };
   }
 
-  // Initialize each movable portal at its anchor target (clamped to Y constraints).
+  // Initialize each movable portal at its anchor target, respecting per-axis
+  // locks and Y constraints.
   for (const m of movable) {
     const t = anchorTargetFor(m, work, links);
     if (t) {
-      m.x = t.x;
-      m.z = t.z;
-      m.y = clampY(t.y, m);
+      const lk = locksOf(m);
+      if (!lk.x) m.x = t.x;
+      if (!lk.z) m.z = t.z;
+      if (!lk.y) m.y = clampY(t.y, m);
     }
   }
 
@@ -209,9 +227,12 @@ export function solve(portals, links, edition) {
     for (const m of movable) {
       const anchor = anchorTargetFor(m, work, links);
       if (!anchor) continue;
+      const lk = locksOf(m);
       const radius = SEARCH[edition][m.dim];
       const step = radius > 20 ? 4 : 1;
-      const yOptions = yCandidates(anchor.y, m);
+      const xs = lk.x ? [m.x] : rangeAround(anchor.x, radius, step);
+      const zs = lk.z ? [m.z] : rangeAround(anchor.z, radius, step);
+      const yOptions = lk.y ? [m.y] : yCandidates(anchor.y, m);
       let best = { score: -Infinity, x: m.x, y: m.y, z: m.z, off: Infinity };
       const consider = (x, y, z) => {
         m.x = x; m.y = y; m.z = z;
@@ -224,21 +245,12 @@ export function solve(portals, links, edition) {
           best = { score: capped, x, y, z, off };
         }
       };
-      for (let dx = -radius; dx <= radius; dx += step) {
-        for (let dz = -radius; dz <= radius; dz += step) {
-          for (const y of yOptions) consider(anchor.x + dx, y, anchor.z + dz);
-        }
-      }
+      for (const x of xs) for (const z of zs) for (const y of yOptions) consider(x, y, z);
       // Local refinement around the coarse best when we stepped > 1.
       if (step > 1) {
-        const cx = best.x, cz = best.z;
-        for (let dx = -step; dx <= step; dx++) {
-          for (let dz = -step; dz <= step; dz++) {
-            const x = cx + dx, z = cz + dz;
-            if (Math.abs(x - anchor.x) > radius || Math.abs(z - anchor.z) > radius) continue;
-            for (const y of yOptions) consider(x, y, z);
-          }
-        }
+        const rxs = lk.x ? [best.x] : rangeAround(best.x, step, 1).filter((x) => Math.abs(x - anchor.x) <= radius);
+        const rzs = lk.z ? [best.z] : rangeAround(best.z, step, 1).filter((z) => Math.abs(z - anchor.z) <= radius);
+        for (const x of rxs) for (const z of rzs) for (const y of yOptions) consider(x, y, z);
       }
       m.x = best.x; m.y = best.y; m.z = best.z;
     }
@@ -296,8 +308,13 @@ function fmtT(t) {
 
 export function serializeState(state) {
   const compact = {
+    v: 2,
     e: state.edition,
-    p: state.portals.map((p) => [p.id, p.name, p.dim === "nether" ? 1 : 0, p.x, p.y, p.z, p.axis === "z" ? 1 : 0, p.locked ? 1 : 0, p.minY ?? "", p.maxY ?? ""]),
+    p: state.portals.map((p) => {
+      const lk = locksOf(p);
+      const bits = (lk.x ? 1 : 0) | (lk.y ? 2 : 0) | (lk.z ? 4 : 0);
+      return [p.id, p.name, p.dim === "nether" ? 1 : 0, p.x, p.y, p.z, p.axis === "z" ? 1 : 0, bits, p.minY ?? "", p.maxY ?? ""];
+    }),
     l: state.links.map((l) => [l.from, l.to]),
   };
   return btoa(unescape(encodeURIComponent(JSON.stringify(compact)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -307,13 +324,19 @@ export function deserializeState(s) {
   const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
   const json = decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad)));
   const c = JSON.parse(json);
+  const v2 = c.v === 2;
   return {
     edition: c.e === "legacy" ? "legacy" : "java",
-    portals: c.p.map((a) => ({
-      id: a[0], name: String(a[1]), dim: a[2] ? "nether" : "overworld",
-      x: +a[3], y: +a[4], z: +a[5], axis: a[6] ? "z" : "x", locked: !!a[7],
-      minY: a[8] === "" ? null : +a[8], maxY: a[9] === "" ? null : +a[9],
-    })),
+    portals: c.p.map((a) => {
+      // v1 links stored a single locked boolean; v2 stores per-axis bits.
+      const bits = v2 ? (+a[7] || 0) : (a[7] ? 7 : 0);
+      return {
+        id: a[0], name: String(a[1]), dim: a[2] ? "nether" : "overworld",
+        x: +a[3], y: +a[4], z: +a[5], axis: a[6] ? "z" : "x",
+        lock: { x: !!(bits & 1), y: !!(bits & 2), z: !!(bits & 4) },
+        minY: a[8] === "" ? null : +a[8], maxY: a[9] === "" ? null : +a[9],
+      };
+    }),
     links: c.l.map((a) => ({ from: a[0], to: a[1] })),
   };
 }

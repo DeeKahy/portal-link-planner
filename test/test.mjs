@@ -91,6 +91,30 @@ if (sol.ok) {
 const legacySol = solve(toSolve, links, "legacy");
 console.log("  legacy solver:", legacySol.ok ? `ok, margin ${legacySol.score.toFixed(1)}` : legacySol.reason);
 
+// --- per-axis locks: pin only Y of the roof portal --------------------------
+const axisLocked = [
+  { id: "storage", name: "Storage", dim: "overworld", x: 814, y: 87, z: -2513, axis: "x", lock: { x: true, y: true, z: true } },
+  { id: "pretty",  name: "Pretty",  dim: "overworld", x: 828, y: 87, z: -2471, axis: "x", lock: { x: true, y: true, z: true } },
+  { id: "roof",    name: "Roof",    dim: "nether",    x: 0, y: 128, z: 0, axis: "x", lock: { x: false, y: true, z: false } },
+  { id: "below",   name: "Below",   dim: "nether",    x: 0, y: 87,  z: 0, axis: "x", lock: { x: false, y: false, z: false }, maxY: 122 },
+];
+const axisSol = solve(axisLocked, links, "java");
+assert(axisSol.ok, "solver works with per-axis locks");
+if (axisSol.ok) {
+  const roof = axisSol.portals.find((p) => p.id === "roof");
+  assert(roof.y === 128, `Y-locked roof portal stays at 128 (got ${roof.y})`);
+  assert(axisSol.results.every((r) => r.allCorrect), "per-axis-lock plan verifies");
+}
+// A portal with X and Z locked but Y free: solver may only slide it vertically.
+const xzLocked = axisLocked.map((p) => p.id === "below" ? { ...p, x: 103, z: -296, y: 100, lock: { x: true, y: false, z: true }, maxY: null } : p);
+const xzSol = solve(xzLocked, links, "java");
+if (xzSol.ok) {
+  const below = xzSol.portals.find((p) => p.id === "below");
+  assert(below.x === 103 && below.z === -296, `XZ-locked portal kept its X/Z (got ${below.x},${below.z})`);
+} else {
+  console.log("  xz-locked case unsolvable (acceptable):", xzSol.reason);
+}
+
 // --- serialization round-trip -------------------------------------------------
 globalThis.btoa ??= (s) => Buffer.from(s, "binary").toString("base64");
 globalThis.atob ??= (s) => Buffer.from(s, "base64").toString("binary");
@@ -98,6 +122,15 @@ const state = { edition: "java", portals, links };
 const rt2 = deserializeState(serializeState(state));
 assert(JSON.stringify(rt2.portals.map((p) => [p.x, p.y, p.z, p.dim])) ===
        JSON.stringify(portals.map((p) => [p.x, p.y, p.z, p.dim])), "serialize/deserialize round-trips");
+// Legacy locked booleans become full per-axis locks.
+assert(rt2.portals[0].lock.x && rt2.portals[0].lock.y && rt2.portals[0].lock.z,
+  "legacy locked flag round-trips as all-axes lock");
+// Partial locks survive a v2 round-trip.
+const rt3 = deserializeState(serializeState({ edition: "java", links: [], portals: [
+  { id: "a", name: "A", dim: "nether", x: 1, y: 128, z: 3, axis: "x", lock: { x: false, y: true, z: false }, minY: null, maxY: null },
+] }));
+assert(!rt3.portals[0].lock.x && rt3.portals[0].lock.y && !rt3.portals[0].lock.z,
+  "per-axis locks survive serialization");
 
 console.log(failures ? `\n${failures} FAILURES` : "\nAll tests passed");
 process.exit(failures ? 1 : 0);
