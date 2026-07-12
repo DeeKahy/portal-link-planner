@@ -1,6 +1,6 @@
-// Portal Link Planner — core domain logic.
+// Portal Link Planner, core domain logic.
 // Models Minecraft nether-portal linking (Java 1.16+ and Bedrock/legacy).
-// Pure functions, no DOM — imported by both the UI (app.js) and the tests.
+// Pure functions, no DOM, imported by both the UI (app.js) and the tests.
 
 export const SEARCH = {
   java:   { nether: 16,  overworld: 128 },
@@ -36,7 +36,7 @@ export function nearestBlockDist(p, t) {
   return best;
 }
 
-// Chebyshev distance (XZ only) from a target to a portal's nearest block —
+// Chebyshev distance (XZ only) from a target to a portal's nearest block -
 // used for candidacy and for exclusion margins.
 export function chebXZ(p, t) {
   let best = Infinity;
@@ -271,8 +271,8 @@ function explainFailure(portals, links, edition) {
     if (r.allCorrect) continue;
     const trip = r.trips.find((t) => !(t.result === "LINK" && t.winner.id === r.dst.id)) || r.trips[0];
     if (trip.result === "NEW_PORTAL") {
-      return `"${r.src.name}" finds no candidate near its target (${fmtT(trip.target)}) — ` +
-        `a new portal would spawn. "${r.dst.name}" must sit within ±${trip.radius} blocks (X/Z) of that target.`;
+      return `"${r.src.name}" finds no candidate near its target ${fmtT(trip.target)}, ` +
+        `so a new portal would spawn. "${r.dst.name}" must sit within ${trip.radius} blocks (X/Z) of that target.`;
     }
     const hijacker = trip.winner;
     const wanted = trip.cands.find((c) => c.portal.id === r.dst.id);
@@ -280,8 +280,8 @@ function explainFailure(portals, links, edition) {
     return `"${r.src.name}" links to "${hijacker.name}" instead of "${r.dst.name}": at target ${fmtT(trip.target)}, ` +
       `"${hijacker.name}" is ${hj.dist.toFixed(1)} blocks away vs ` +
       `${wanted ? wanted.dist.toFixed(1) + " blocks" : "not a candidate at all"} for "${r.dst.name}". ` +
-      `No placement inside the ±${trip.radius} search square separates them — move the locked portals further apart ` +
-      `or add a Y offset to win on 3D distance.`;
+      `No placement inside the ${trip.radius}-block search square separates them. Move the locked portals further apart, ` +
+      `or add a height offset to win on 3D distance.`;
   }
   return "No valid placement found within the search squares and constraints.";
 }

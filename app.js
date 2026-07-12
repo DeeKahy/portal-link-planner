@@ -100,7 +100,7 @@ function renderPortals() {
         <span class="dim-tag">${p.dim === "nether" ? "NETHER" : "OVERWORLD"}</span>
         <input type="text" data-f="name" value="${escapeHtml(p.name)}" aria-label="Portal name">
         <label><input type="checkbox" data-f="locked" ${p.locked ? "checked" : ""}> locked</label>
-        <button class="del" data-del title="Delete portal">✕</button>
+        <button class="del" data-del title="Delete portal">&times;</button>
       </div>
       <div class="row">
         <label>X <input type="number" data-f="x" value="${p.x}"></label>
@@ -111,8 +111,8 @@ function renderPortals() {
         </label>
       </div>
       <div class="row">
-        <label>Y constraint: min <input type="number" data-f="minY" value="${p.minY ?? ""}" placeholder="—" ${p.locked ? "disabled" : ""}></label>
-        <label>max <input type="number" data-f="maxY" value="${p.maxY ?? ""}" placeholder="—" ${p.locked ? "disabled" : ""}></label>
+        <label>Y constraint: min <input type="number" data-f="minY" value="${p.minY ?? ""}" placeholder="any" ${p.locked ? "disabled" : ""}></label>
+        <label>max <input type="number" data-f="maxY" value="${p.maxY ?? ""}" placeholder="any" ${p.locked ? "disabled" : ""}></label>
       </div>`;
     card.addEventListener("change", (e) => {
       const f = e.target.dataset.f;
@@ -149,7 +149,7 @@ function renderLinks() {
       `<option value="${p.id}" ${p.id === sel ? "selected" : ""}>${escapeHtml(p.name)} (${p.dim})</option>`).join("");
     row.innerHTML = `<select data-e="from">${opts(l.from)}</select> →
       <select data-e="to">${opts(l.to)}</select>
-      <button data-del title="Remove link">✕</button>`;
+      <button data-del title="Remove link">&times;</button>`;
     row.addEventListener("change", (e) => {
       const f = e.target.dataset.e;
       if (f) { l[f] = e.target.value; render(); }
@@ -163,7 +163,7 @@ function renderLinks() {
 }
 
 function statusWord(s) {
-  return s === "green" ? "✔ SAFE" : s === "yellow" ? "⚠ FRAGILE" : "✘ BROKEN";
+  return s === "green" ? "SAFE" : s === "yellow" ? "FRAGILE" : "BROKEN";
 }
 
 function renderVerification() {
@@ -180,28 +180,28 @@ function renderVerification() {
     const nominal = r.trips[0];
     let headline;
     if (nominal.result === "NEW_PORTAL") {
-      headline = `<span class="red-t">${escapeHtml(r.src.name)} → NEW PORTAL WOULD SPAWN</span> at ${fmtPt(nominal.target)} (no candidate within ±${nominal.radius})`;
+      headline = `<span class="red-t">BROKEN</span> ${escapeHtml(r.src.name)} finds no portal within ${nominal.radius} blocks (sideways) of its arrival spot ${fmtPt(nominal.target)}. The game would create a brand-new portal there.`;
     } else if (nominal.winner.id === r.dst.id) {
-      const m = r.minMargin === Infinity ? "unopposed" : `margin ${r.minMargin.toFixed(1)} blocks`;
-      const wobble = r.allCorrect ? "wobble-safe" : "BREAKS under ±1 wobble";
-      headline = `<span class="${r.status}-t">${statusWord(r.status)}</span> ${escapeHtml(r.src.name)} → ${escapeHtml(r.dst.name)} (${m}, ${wobble})`;
+      const m = r.minMargin === Infinity ? "no rival portals anywhere near" : `${r.minMargin.toFixed(1)} blocks of slack`;
+      const wobble = r.allCorrect ? "works wherever you stand in the frame" : "breaks if you stand on the wrong side of the frame";
+      headline = `<span class="${r.status}-t">${statusWord(r.status)}</span> ${escapeHtml(r.src.name)} takes you to ${escapeHtml(r.dst.name)} (${m}; ${wobble})`;
     } else {
-      headline = `<span class="red-t">${statusWord(r.status)}</span> ${escapeHtml(r.src.name)} → hijacked by <strong>${escapeHtml(nominal.winner.name)}</strong> (wanted ${escapeHtml(r.dst.name)})`;
+      headline = `<span class="red-t">BROKEN</span> ${escapeHtml(r.src.name)} takes you to <strong>${escapeHtml(nominal.winner.name)}</strong> instead of ${escapeHtml(r.dst.name)}. It sits closer to the arrival spot.`;
     }
     const tripRows = r.trips.map((t) => {
       const cand = t.cands.map((c) =>
-        `${escapeHtml(c.portal.name)} @ ${c.dist.toFixed(1)}`).join(", ") || "—";
+        `${escapeHtml(c.portal.name)} @ ${c.dist.toFixed(1)}`).join(", ") || "none";
       const excl = t.excluded.map((e) =>
-        `${escapeHtml(e.portal.name)} (+${e.outside} outside)`).join(", ") || "—";
+        `${escapeHtml(e.portal.name)} (+${e.outside} outside)`).join(", ") || "none";
       const win = t.result === "LINK" ? escapeHtml(t.winner.name) : "NEW PORTAL";
       const mg = tripMargin(t);
       return `<tr><td>(${t.entry.x}, ${t.entry.y}, ${t.entry.z})</td><td>${fmtPt(t.target)}</td>
         <td>${cand}</td><td>${excl}</td><td>${win}</td>
-        <td>${mg ? mg.margin.toFixed(1) + " (" + mg.kind + " vs " + escapeHtml(mg.against.name) + ")" : "—"}</td></tr>`;
+        <td>${mg ? mg.margin.toFixed(1) + " (" + mg.kind + " vs " + escapeHtml(mg.against.name) + ")" : "none"}</td></tr>`;
     }).join("");
     div.innerHTML = `<div class="headline">${headline}</div>
-      <details><summary>trip detail (both wobble variants)</summary>
-      <table><tr><th>entity at</th><th>target</th><th>candidates (3D dist)</th><th>excluded (blocks outside square)</th><th>winner</th><th>margin</th></tr>${tripRows}</table>
+      <details><summary>show the math (both standing positions)</summary>
+      <table><tr><th>standing at</th><th>arrival spot</th><th>portals found (3D distance)</th><th>ignored (blocks outside square)</th><th>winner</th><th>margin</th></tr>${tripRows}</table>
       </details>`;
     out.appendChild(div);
   }
@@ -211,7 +211,7 @@ function renderVerification() {
   for (const w of strayWarnings(state.portals, state.links, state.edition)) {
     const d = document.createElement("p");
     d.className = "warning";
-    d.textContent = `⚠ "${w.intruder.name}" is a candidate in "${w.source.name}"'s search square (${w.dist.toFixed(1)} blocks from target) but is not its intended destination. If this portal shouldn't exist (stale/auto-generated), remember to demolish it in-game too.`;
+    d.textContent = `Heads up: "${w.intruder.name}" sits inside "${w.source.name}"'s search square (${w.dist.toFixed(1)} blocks from the arrival spot) but is not its intended destination. If that portal should not exist (stale or auto-generated), remember to demolish it in-game too.`;
     warn.appendChild(d);
   }
 }
@@ -274,22 +274,22 @@ function renderMaps() {
     // target crosshairs
     for (const { t } of geo[d].targets) {
       const c = 5;
-      svg += `<g stroke="#fbbf24" stroke-width="1.2">
+      svg += `<g stroke="#b45309" stroke-width="1.2">
         <line x1="${X(t.x) - c}" y1="${Z(t.z)}" x2="${X(t.x) + c}" y2="${Z(t.z)}"/>
         <line x1="${X(t.x)}" y1="${Z(t.z) - c}" x2="${X(t.x)}" y2="${Z(t.z) + c}"/></g>`;
     }
     // portals
     for (const p of geo[d].portals) {
-      const color = d === "nether" ? "#ef4444" : "#a855f7";
+      const color = d === "nether" ? "#dc2626" : "#7c3aed";
       svg += `<g class="portal-marker" data-portal="${p.id}">
-        <rect x="${X(p.x) - 4}" y="${Z(p.z) - 4}" width="8" height="8" rx="1.5" fill="${color}" stroke="#fff" stroke-width="${p.locked ? 1.6 : 0.6}"/>
-        <text x="${X(p.x) + 7}" y="${Z(p.z) + 4}" font-size="11" fill="#e8e2f4">${escapeHtml(p.name)}${p.locked ? " 🔒" : ""}</text></g>`;
+        <rect x="${X(p.x) - 4}" y="${Z(p.z) - 4}" width="8" height="8" rx="1.5" fill="${color}" stroke="#2a2440" stroke-width="${p.locked ? 1.6 : 0.5}"/>
+        <text x="${X(p.x) + 7}" y="${Z(p.z) + 4}" font-size="11" fill="#3a3352">${escapeHtml(p.name)}${p.locked ? " (locked)" : ""}</text></g>`;
     }
     svg += `<defs><marker id="arr-${d}" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
       <path d="M0,0 L7,3 L0,6" fill="none" stroke="context-stroke" stroke-width="1.2"/></marker></defs></svg>`;
     const wrap = document.createElement("div");
     wrap.className = "map-wrap";
-    wrap.innerHTML = `<h3>${d === "nether" ? "Nether" : "Overworld"} — 1 block = ${s.toFixed(2)} px · squares = search areas · ✛ = scaled targets</h3>${svg}`;
+    wrap.innerHTML = `<h3>${d === "nether" ? "Nether" : "Overworld"} (1 block = ${s.toFixed(2)} px). Dashed squares are search areas, crosses are arrival spots.</h3>${svg}`;
     container.appendChild(wrap);
   }
 
@@ -385,30 +385,30 @@ $("#clear").addEventListener("click", () => {
 $("#share").addEventListener("click", async () => {
   const url = location.origin + location.pathname + "?s=" + serializeState(state);
   history.replaceState(null, "", url);
-  await copy(url, $("#share"), "🔗 Copy share link");
+  await copy(url, $("#share"), "Copy share link");
 });
 
 $("#solve").addEventListener("click", () => {
   const out = $("#solver-output");
   const sol = solve(state.portals, state.links, state.edition);
   if (!sol.ok) {
-    out.innerHTML = `<p class="sol-fail">✘ No solution: ${escapeHtml(sol.reason)}</p>`;
+    out.innerHTML = `<p class="sol-fail">No solution: ${escapeHtml(sol.reason)}</p>`;
     return;
   }
   state.portals = sol.portals;
   const moved = sol.portals.filter((p) => sol.moved.includes(p.id))
     .map((p) => `${escapeHtml(p.name)} → (${p.x}, ${p.y}, ${p.z})`).join("; ");
   render();
-  out.innerHTML = `<p class="sol-ok">✔ Solved with worst-case margin ${sol.score.toFixed(1)} blocks (wobble included). Moved: ${moved || "nothing (already optimal)"}. Return trips re-verified.</p>`;
+  out.innerHTML = `<p class="sol-ok">Solved. Worst-case slack across all connections: ${sol.score.toFixed(1)} blocks, standing position included. Moved: ${moved || "nothing (already optimal)"}. Return trips re-checked.</p>`;
 });
 
-$("#copy-coords").addEventListener("click", (e) => copy(coordText(), e.target, "📋 Copy coordinates"));
-$("#copy-tp").addEventListener("click", (e) => copy(tpText(), e.target, "📋 Copy /tp commands"));
+$("#copy-coords").addEventListener("click", (e) => copy(coordText(), e.target, "Copy coordinates"));
+$("#copy-tp").addEventListener("click", (e) => copy(tpText(), e.target, "Copy /tp commands"));
 
 async function copy(text, btn, label) {
   try {
     await navigator.clipboard.writeText(text);
-    btn.textContent = "✓ Copied!";
+    btn.textContent = "Copied";
   } catch {
     btn.textContent = "Copy failed";
   }
