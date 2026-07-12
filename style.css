@@ -1,25 +1,42 @@
 :root {
-  --bg: #14101c;
-  --panel: #1e1830;
-  --panel2: #261e3c;
-  --text: #e8e2f4;
-  --muted: #9a8fc0;
+  --bg: #0b0713;
+  --panel: rgba(30, 22, 50, 0.72);
+  --panel2: rgba(38, 30, 60, 0.85);
+  --text: #ece5fa;
+  --muted: #a89ac9;
   --accent: #a855f7;
-  --green: #34d399;
+  --accent-bright: #c084fc;
+  --green: #4ade80;
   --yellow: #fbbf24;
   --red: #f87171;
-  --border: #3b2f5e;
+  --border: rgba(168, 85, 247, 0.22);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(1000px 600px at 80% -10%, rgba(107, 33, 168, 0.25), transparent 60%),
+    radial-gradient(800px 500px at -10% 30%, rgba(76, 29, 149, 0.18), transparent 60%),
+    linear-gradient(var(--bg), #120b1e 60%, var(--bg));
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.45;
 }
+.topnav {
+  display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;
+  padding: 0.8rem 1.5rem;
+  background: rgba(11, 7, 19, 0.82);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 50;
+}
+.topnav a { color: var(--muted); text-decoration: none; font-size: 0.92rem; }
+.topnav a:hover { color: var(--text); }
+.topnav .brand { font-family: "Press Start 2P", monospace; font-size: 0.68rem; color: var(--accent-bright); }
+.topnav .spacer { flex: 1; }
 header { padding: 1.2rem 1.5rem 0.6rem; }
-h1 { margin: 0 0 0.2rem; font-size: 1.6rem; color: var(--accent); }
+h1 { margin: 0 0 0.2rem; font-size: 1.6rem; color: var(--accent); text-shadow: 0 0 20px rgba(168, 85, 247, 0.4); }
 .tagline { margin: 0 0 0.8rem; color: var(--muted); max-width: 60rem; }
 h2 { font-size: 1.05rem; margin: 0 0 0.6rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .toolbar { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
@@ -31,9 +48,11 @@ main { display: grid; grid-template-columns: minmax(340px, 460px) 1fr; gap: 1rem
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 0.9rem;
   margin-bottom: 1rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 #left .panel, #right .panel { margin-bottom: 1rem; }
 

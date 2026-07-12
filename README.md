@@ -6,6 +6,11 @@ A client-side web app that helps Minecraft players plan Nether portal placements
 
 No backend, no build step — plain HTML/CSS/JS. All math runs in the browser; state persists in `localStorage` and can be shared via URL.
 
+Two pages:
+
+- **`/` (simple mode)** — beginner-friendly: an animated visual guide to how portal linking works, a "where should I build?" coordinate calculator, and a "will my portals link?" checker with plain-language verdicts and one-click fixes.
+- **`/advanced.html`** — the full toolkit: portal editor, trip-by-trip verifier, auto-solver, 2D maps, presets, share links.
+
 ## What it models
 
 The real portal-linking rules for Java Edition 1.16+ (with a Bedrock / pre-1.16 toggle):
