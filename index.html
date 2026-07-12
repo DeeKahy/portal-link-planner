@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Link Planner — Minecraft Nether Portal Linking Calculator</title>
+  <meta name="description" content="Free browser tool to plan Minecraft nether portal placements so portals link the way you intend. Simulates the exact Java 1.16+ / Bedrock linking rules, detects link-stealing between nearby portals, and solves for safe coordinates automatically.">
+  <meta name="keywords" content="minecraft nether portal calculator, portal linking, nether portal link, portal coordinates, minecraft portal planner, link stealing, nether roof portal, portal pairing">
+  <link rel="canonical" href="https://portals.smallapp.cc/">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://portals.smallapp.cc/">
+  <meta property="og:title" content="Portal Link Planner — Minecraft Nether Portal Linking Calculator">
+  <meta property="og:description" content="Plan nether portal placements that link correctly. Simulates Minecraft's real portal search rules, flags hijacked links, and proposes safe coordinates.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Portal Link Planner">
+  <meta name="twitter:description" content="Minecraft nether portal linking calculator and solver — runs entirely in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1024'/%3E%3Crect x='8' y='4' width='16' height='24' rx='2' fill='none' stroke='%236b21a8' stroke-width='4'/%3E%3Crect x='12' y='8' width='8' height='16' fill='%23a855f7'/%3E%3C/svg%3E">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Portal Link Planner",
+    "url": "https://portals.smallapp.cc/",
+    "applicationCategory": "UtilityApplication",
+    "operatingSystem": "Any (browser)",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "A client-side calculator and solver for Minecraft nether portal linking. Models coordinate scaling, search squares, 3D-distance winner selection, and target wobble for Java 1.16+ and Bedrock/legacy editions."
+  }
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>⛧ Portal Link Planner</h1>
+    <p class="tagline">Plan Minecraft nether portal placements that link the way you intend — verify every trip, catch link-stealing, and auto-solve safe coordinates. Runs entirely in your browser.</p>
+    <div class="toolbar">
+      <label>Edition:
+        <select id="edition">
+          <option value="java">Java 1.16+ (Nether ±16 / Overworld ±128)</option>
+          <option value="legacy">Bedrock / Java pre-1.16 (±128 both)</option>
+        </select>
+      </label>
+      <label>Preset:
+        <select id="preset">
+          <option value="">— load a preset —</option>
+          <option value="worked">Roof + ground portal, two nearby bases (link-stealing demo)</option>
+          <option value="simple">Simple pair</option>
+          <option value="hub">Nether hub spacing check</option>
+        </select>
+      </label>
+      <button id="share">🔗 Copy share link</button>
+      <button id="clear" class="danger">Clear all</button>
+    </div>
+  </header>
+
+  <details id="explainer">
+    <summary>How portal linking actually works (Java 1.16+)</summary>
+    <div class="explainer-body">
+      <ol>
+        <li><strong>No stored links.</strong> Portals never remember a partner — every trip recalculates the destination from scratch.</li>
+        <li><strong>Coordinate scaling.</strong> Overworld → Nether: <code>(floor(x/8), y, floor(z/8))</code>. Nether → Overworld: <code>(x×8, y, z×8)</code>. Y is never scaled. Floor semantics matter for negatives: <code>floor(−2513/8) = −315</code>.</li>
+        <li><strong>Candidate search.</strong> The game collects every existing portal block whose X and Z are within a <em>square</em> (Chebyshev) around the target: ±16 in the Nether, ±128 in the Overworld (±128 both in Bedrock / pre-1.16). The full Y column is searched — Y never limits candidacy.</li>
+        <li><strong>Winner selection.</strong> Among candidates, the portal block with the smallest <em>3D Euclidean</em> distance to the target wins. Y matters here. No candidates → a brand-new portal spawns (usually a planning error).</li>
+        <li><strong>Target wobble.</strong> You stand somewhere inside a 2-block-wide frame, so the computed target can shift ±1 in X or Z. Robust plans survive the worst case — this tool checks every variant.</li>
+      </ol>
+      <p>Two independent ways portal A beats portal B: <strong>exclusion</strong> (B is outside the search square — the strongest lock, achievable in Java's ±16 Nether) and <strong>distance dominance</strong> (both are candidates, but A is 3D-closer — big Y offsets, like a roof portal at Y≈128 vs targets at Y≈87, create a built-in handicap). Always check the <em>return</em> trip too: a nether portal 20 blocks off-target is 160 overworld blocks off after ×8 scaling — outside the return square.</p>
+    </div>
+  </details>
+
+  <main>
+    <section id="left">
+      <div class="panel">
+        <h2>Portals <button id="add-overworld">+ Overworld</button> <button id="add-nether">+ Nether</button></h2>
+        <div id="portal-list"></div>
+      </div>
+      <div class="panel">
+        <h2>Desired links <button id="add-link">+ Link</button></h2>
+        <div id="link-list"></div>
+        <div class="pair-row">
+          <select id="pair-a"></select> ⇄ <select id="pair-b"></select>
+          <button id="pair-btn">Pair bidirectionally</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Solver</h2>
+        <p class="hint">Locks stay put; the solver proposes coordinates for movable portals so every desired link verifies, preferring exclusion locks with a wobble buffer.</p>
+        <button id="solve" class="primary">▶ Solve movable portals</button>
+        <div id="solver-output"></div>
+      </div>
+    </section>
+
+    <section id="right">
+      <div class="panel">
+        <h2>Verification</h2>
+        <div id="verify-output"></div>
+        <div id="warnings"></div>
+      </div>
+      <div class="panel">
+        <h2>Map <span class="hint">(top-down, 8:1 true relative scale; hover a portal to see where it competes)</span></h2>
+        <div id="maps"></div>
+      </div>
+      <div class="panel">
+        <h2>Export</h2>
+        <pre id="coords-out"></pre>
+        <button id="copy-coords">📋 Copy coordinates</button>
+        <button id="copy-tp">📋 Copy /tp commands</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>All math runs client-side; nothing is uploaded. State is saved in your browser and encodable in the share URL.
+    Models Java 1.16+ and Bedrock/legacy portal search rules (±16/±128 squares, 3D-distance winner, target wobble).
+    <a href="https://github.com/DeeKahy/portal-link-planner">Source on GitHub</a>.</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

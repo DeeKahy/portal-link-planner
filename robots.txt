@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://portals.smallapp.cc/sitemap.xml
