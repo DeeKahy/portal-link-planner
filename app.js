@@ -8,6 +8,8 @@ import {
 // ---------------------------------------------------------------------------
 let state = { edition: "java", portals: [], links: [] };
 let nextId = 1;
+// Which unlocked portal the click-to-place dropdown targets, per dimension.
+const placeChoice = { overworld: null, nether: null };
 
 const PRESETS = {
   worked: {
@@ -289,8 +291,55 @@ function renderMaps() {
       <path d="M0,0 L7,3 L0,6" fill="none" stroke="context-stroke" stroke-width="1.2"/></marker></defs></svg>`;
     const wrap = document.createElement("div");
     wrap.className = "map-wrap";
-    wrap.innerHTML = `<h3>${d === "nether" ? "Nether" : "Overworld"} (1 block = ${s.toFixed(2)} px). Dashed squares are search areas, crosses are arrival spots.</h3>${svg}`;
+    const unlocked = geo[d].portals.filter((p) => !p.locked);
+    const placeUI = unlocked.length
+      ? `<label>Click the map to move: <select data-place>${unlocked.map((p) =>
+          `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select></label>`
+      : `<span></span>`;
+    wrap.innerHTML = `<h3>${d === "nether" ? "Nether" : "Overworld"} (1 block = ${s.toFixed(2)} px). Dashed squares are search areas, crosses are arrival spots.</h3>
+      <div class="map-tools">${placeUI}<span class="coord-readout" data-readout>hover the map for block coordinates</span></div>${svg}`;
     container.appendChild(wrap);
+
+    // Cursor position in block coordinates, via the SVG's own transform so it
+    // stays correct however the element is scaled or letterboxed.
+    const svgEl = wrap.querySelector("svg");
+    const readout = wrap.querySelector("[data-readout]");
+    const toWorld = (e) => {
+      const ctm = svgEl.getScreenCTM?.();
+      if (!ctm) return null;
+      const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+      return { x: Math.floor(b.minX + pt.x / s), z: Math.floor(b.minZ + pt.y / s) };
+    };
+    svgEl.addEventListener("mousemove", (e) => {
+      const pos = toWorld(e);
+      if (!pos) return;
+      const zones = geo[d].targets
+        .filter(({ t, radius }) => Math.abs(pos.x - t.x) <= radius && Math.abs(pos.z - t.z) <= radius)
+        .map(({ srcId }) => state.portals.find((p) => p.id === srcId)?.name)
+        .filter(Boolean);
+      readout.textContent = `X ${pos.x}, Z ${pos.z}` +
+        (zones.length ? ` (inside the search zone of: ${zones.join(", ")})` : " (outside every search zone)");
+    });
+    svgEl.addEventListener("mouseleave", () => {
+      readout.textContent = "hover the map for block coordinates";
+    });
+
+    // Click-to-place: set the chosen unlocked portal's X/Z to the clicked block.
+    if (unlocked.length) {
+      const sel = wrap.querySelector("[data-place]");
+      if (placeChoice[d] && unlocked.some((p) => p.id === placeChoice[d])) sel.value = placeChoice[d];
+      placeChoice[d] = sel.value;
+      sel.addEventListener("change", () => { placeChoice[d] = sel.value; });
+      svgEl.style.cursor = "crosshair";
+      svgEl.addEventListener("click", (e) => {
+        const pos = toWorld(e);
+        const portal = state.portals.find((p) => p.id === sel.value);
+        if (!pos || !portal || portal.locked) return;
+        portal.x = pos.x;
+        portal.z = pos.z;
+        render();
+      });
+    }
   }
 
   // Hover: highlight every search square the hovered portal is a candidate in.
