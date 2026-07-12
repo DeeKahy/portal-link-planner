@@ -280,10 +280,10 @@ function explainFailure(portals, links, edition) {
     return `"${r.src.name}" links to "${hijacker.name}" instead of "${r.dst.name}": at target ${fmtT(trip.target)}, ` +
       `"${hijacker.name}" is ${hj.dist.toFixed(1)} blocks away vs ` +
       `${wanted ? wanted.dist.toFixed(1) + " blocks" : "not a candidate at all"} for "${r.dst.name}". ` +
-      `No placement inside the ${trip.radius}-block search square separates them. Move the locked portals further apart, ` +
+      `No placement inside the ${trip.radius}-block search zone separates them. Move the locked portals further apart, ` +
       `or add a height offset to win on 3D distance.`;
   }
-  return "No valid placement found within the search squares and constraints.";
+  return "No valid placement found within the search zones and constraints.";
 }
 
 function fmtT(t) {

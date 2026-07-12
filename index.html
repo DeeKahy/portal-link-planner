@@ -44,17 +44,17 @@
       {
         "@type": "Question",
         "name": "Why does my nether portal link to the wrong portal?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Portals do not remember partners. Every trip, the game searches a square area around your scaled coordinates (16 blocks each way in the Nether, 128 in the Overworld on Java 1.16+) and picks the closest portal in 3D. If another portal sits closer to your arrival spot, it steals the link. Move one portal out of the search square or closer to its own arrival spot." }
+        "acceptedAnswer": { "@type": "Answer", "text": "Portals do not remember partners. Every trip, the game searches a square area around your scaled coordinates (16 blocks each way in the Nether, 128 in the Overworld on Java 1.16+) and picks the closest portal in 3D. If another portal sits closer to your arrival spot, it steals the link. Move one portal out of the search zone or closer to its own arrival spot." }
       },
       {
         "@type": "Question",
         "name": "Why did Minecraft create a new portal instead of using mine?",
-        "acceptedAnswer": { "@type": "Answer", "text": "No existing portal was inside the search square around your scaled arrival coordinates (16 blocks each way in the Nether, 128 in the Overworld on Java 1.16+), so the game spawned a fresh one. Rebuild your portal within that range. Height does not matter for being found, only sideways distance." }
+        "acceptedAnswer": { "@type": "Answer", "text": "No existing portal was inside the search zone around your scaled arrival coordinates (16 blocks each way in the Nether, 128 in the Overworld on Java 1.16+), so the game spawned a fresh one. Rebuild your portal within that range. Height does not matter for being found, only sideways distance." }
       }
     ]
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <header>
@@ -76,30 +76,43 @@
         </select>
       </label>
       <button id="share">Copy share link</button>
+      <button id="undo" disabled>Undo</button>
       <button id="clear" class="danger">Clear all</button>
     </div>
+    <div class="quickconv">Quick convert:
+      <select id="qc-dim">
+        <option value="overworld">Overworld</option>
+        <option value="nether">Nether</option>
+      </select>
+      <label>X <input type="number" id="qc-x" value="800"></label>
+      <label>Z <input type="number" id="qc-z" value="-2400"></label>
+      <span>=</span> <strong id="qc-out"></strong>
+    </div>
+    <div id="example-banner" hidden>You are looking at example data: two bases whose portals would steal each other's links, already solved.
+      <button id="banner-clear">Clear it</button> to plan your own portals, or just poke around.</div>
   </header>
 
   <main>
     <section id="left">
       <div class="panel">
         <h2><span class="step-num">1</span> Your portals <button id="add-overworld">+ Overworld</button> <button id="add-nether">+ Nether</button></h2>
-        <span class="hint">One entry per portal. X, Y, Z is the lowest purple block of the portal opening (stand in the portal and press F3, or check coordinates in Bedrock settings). "Frame along" is the direction the opening runs. Tick "locked" for portals that are already built and must stay where they are. Unlocked portals may be moved by the solver, optionally within a height range.</span>
+        <span class="hint">X, Y, Z is the lowest purple block of the portal (stand in it and press F3, or paste the F3 line). Lock portals that are already built; unlocked ones can be moved by the solver or by clicking the map.</span>
         <div id="portal-list"></div>
       </div>
       <div class="panel">
-        <h2><span class="step-num">2</span> Desired connections <button id="add-link">+ Connection</button></h2>
-        <span class="hint">Say which portal should take you where. Most setups want each pair connected in both directions; the button below adds both at once.</span>
+        <h2><span class="step-num">2</span> Desired connections</h2>
+        <span class="hint">Say which portal should take you where. Destinations always sit in the other dimension.</span>
         <div id="link-list"></div>
         <div class="pair-row">
           <select id="pair-a"></select> <select id="pair-b"></select>
-          <button id="pair-btn">Connect these two both ways</button>
+          <button id="pair-btn">Connect both ways</button>
+          <button id="pair-one" title="Add only the one-directional connection, for special setups">one way only</button>
         </div>
       </div>
       <div class="panel">
-        <h2>Solver</h2>
-        <span class="hint">Stuck, or starting fresh? The solver keeps locked portals in place and picks coordinates for the unlocked ones so that every connection in step 2 works, with a safety margin. It prefers putting rival portals fully outside each other's search squares, and re-checks every return trip.</span>
-        <button id="solve" class="primary">Solve unlocked portals</button>
+        <h2>Automatic placement</h2>
+        <span class="hint">Keeps locked portals in place and picks coordinates for the unlocked ones so every connection works with a safety margin, return trips included.</span>
+        <button id="solve" class="primary">Find spots for unlocked portals</button>
         <div id="solver-output"></div>
       </div>
     </section>
@@ -107,19 +120,20 @@
     <section id="right">
       <div class="panel">
         <h2><span class="step-num">3</span> Does it work?</h2>
-        <span class="hint">Live simulation of every connection, updated as you type. "Margin" is how many blocks of slack you have before the link breaks: the gap to the runner-up portal, or how far a rival sits outside the search square. Under 3 blocks is risky because your exact standing spot in the frame shifts the numbers by 1.</span>
+        <span class="hint">Every connection is simulated live, both ways you can stand in the frame. Slack is how many blocks you have to spare before the link breaks; under 3 is risky.</span>
         <div id="verify-output"></div>
         <div id="warnings"></div>
       </div>
       <div class="panel">
-        <h2>Map <span class="hint">(top-down view of both dimensions at true 8:1 relative scale). Move the mouse over a map to read block coordinates and see which search zones you are inside, so you can pick an exact spot. Choose an unlocked portal in the dropdown and click the map to place it there. Hovering a portal highlights every search square it competes in.</span></h2>
+        <h2>Map</h2>
         <div id="maps"></div>
+        <p class="hint map-legend">Dashed squares are search zones around each arrival spot (cross). Green arrows show correct links, red shows hijacked ones. Move the mouse over a map to read block coordinates, zoom in for precision, and click to move the selected unlocked portal. Hovering a portal highlights every zone it competes in.</p>
       </div>
       <div class="panel">
         <h2>Export</h2>
-        <pre id="coords-out"></pre>
         <button id="copy-coords">Copy coordinates</button>
         <button id="copy-tp">Copy /tp commands</button>
+        <details class="adv"><summary>preview</summary><pre id="coords-out"></pre></details>
       </div>
     </section>
   </main>
@@ -160,7 +174,7 @@
         <p><strong>Height does not matter for being found.</strong> A portal on the nether roof is still spotted if its X and Z are inside the square. A portal 17 blocks off sideways is invisible, no matter its height.</p>
       </div>
       <div class="diagram">
-        <svg viewBox="0 0 640 300" role="img" aria-label="Diagram: search square around the arrival spot, one portal found inside, one ignored outside">
+        <svg viewBox="0 0 640 300" role="img" aria-label="Diagram: search zone around the arrival spot, one portal found inside, one ignored outside">
           <g class="svg-grid">
             <line x1="0" y1="60" x2="640" y2="60"/><line x1="0" y1="120" x2="640" y2="120"/>
             <line x1="0" y1="180" x2="640" y2="180"/><line x1="0" y1="240" x2="640" y2="240"/>
@@ -213,12 +227,12 @@
     <div class="step">
       <div>
         <h3>4. Link stealing, and how to beat it</h3>
-        <p>Two bases close together in the Overworld end up with arrival spots <strong>right next to each other</strong> in the Nether. One nether portal can then sit inside both search squares and hijack its neighbour's traffic.</p>
-        <p>The fix: move one portal so it is <strong>outside the other base's square</strong> (more than 16 blocks from that arrival spot) while staying inside its own. Each base can then only ever find its own portal. This is exactly what the solver works out for you, including the return trips, where the times-8 scaling amplifies any offset.</p>
+        <p>Two bases close together in the Overworld end up with arrival spots <strong>right next to each other</strong> in the Nether. One nether portal can then sit inside both search zones and hijack its neighbour's traffic.</p>
+        <p>The fix: move one portal so it is <strong>outside the other base's search zone</strong> (more than 16 blocks from that arrival spot) while staying inside its own. Each base can then only ever find its own portal. This is exactly what the solver works out for you, including the return trips, where the times-8 scaling amplifies any offset.</p>
         <p>One more subtlety the planner handles for you: the game uses <em>your</em> position for the divide-by-8 math, and a portal is 2 blocks wide, so the arrival spot can shift by 1 block depending on where you stand. That is why margins under 3 blocks are flagged as fragile.</p>
       </div>
       <div class="diagram">
-        <svg viewBox="0 0 640 300" role="img" aria-label="Diagram: before, one portal steals both links; after moving it outside the neighbouring search square, each base links to its own portal">
+        <svg viewBox="0 0 640 300" role="img" aria-label="Diagram: before, one portal steals both links; after moving it outside the neighbouring search zone, each base links to its own portal">
           <text x="150" y="24" text-anchor="middle" class="svg-label bright" fill="#b91c1c">Too close</text>
           <rect x="55" y="60" width="190" height="190" fill="rgba(124,58,237,0.07)" stroke="#7c3aed" stroke-dasharray="6 4" rx="4"/>
           <g class="crosshair"><line x1="120" y1="140" x2="136" y2="140"/><line x1="128" y1="132" x2="128" y2="148"/></g>
@@ -248,6 +262,6 @@
     <a href="https://github.com/DeeKahy/portal-link-planner">Source on GitHub</a>.</p>
   </footer>
 
-  <script type="module" src="app.js?v=4"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>
